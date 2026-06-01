@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-SurrenderRule = Literal["none", "late", "early"]
+SurrenderRule = Literal["none", "late", "early"]   # "none" = no surrender, "late" = player can surrender after dealer checks for blackjack, "early" = player can surrender before dealer checks for blackjack (not common in US casinos)
 
 
 @dataclass
