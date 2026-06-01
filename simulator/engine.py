@@ -50,7 +50,7 @@ def play_hand(
     deal_card(player); deal_card(dealer)
     deal_card(player); deal_card(dealer)
 
-    dealer_upcard = dealer.cards[0].value
+    dealer_upcard = dealer.cards[0].value # hole-card hidden
     dealer_upcard_key = min(dealer_upcard, 11)  # 10 for J/Q/K/10, 11 for Ace
 
     result = RoundResult()
