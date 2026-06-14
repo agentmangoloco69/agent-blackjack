@@ -48,14 +48,47 @@ def test_free_bet_push_22():
     )
 
 
-def test_counting_positive_ev():
-    """Card counting with 1-2-3-4-6 spread should produce near-zero or positive EV.
+def test_counting_beats_basic_strategy():
+    """Card counting with a 1-2-3-4-6 spread + deviations must beat flat basic strategy.
 
-    Large bankroll prevents early bankruptcy from skewing the sample.
+    A correct Hi-Lo counter turns the ~-0.69% basic-strategy edge into a positive
+    one. EV at testable sample sizes is too noisy to assert ">0" reliably (the
+    high-variance split-10s deviations swing it), so we pin the RNG seed and use a
+    large sample for a stable, meaningful comparison. A large bankroll prevents
+    early bankruptcy from truncating the sample.
+
+    Regression guard for two engine bugs that once drove counting NEGATIVE:
+      (1) the running count desynced from the shoe on mid-round reshuffles, and
+      (2) deviations fired on soft/pair hands.
+    See also the deterministic guards: test_true_count_stays_bounded and
+    tests/test_deviations.py.
     """
-    result = run_simulation(STANDARD_6D_H17, n_hands=100_000,
-                            starting_bankroll=500_000,
+    import random
+    random.seed(20240614)
+    result = run_simulation(STANDARD_6D_H17, n_hands=1_000_000,
+                            starting_bankroll=2_000_000,
                             use_counting=True, use_deviations=True)
     stats = compute_stats(result)
-    # Counter should get EV well above -2% (ideally near zero or positive)
-    assert stats.ev_percent > -2.5, f"Counting EV too low: {stats.ev_percent:.2f}%"
+    # Fixed engine converges to roughly +0.1% here (positive in practice, but the
+    # heavy-tailed split-10s deviations make a strict ">0" flaky). The buggy state
+    # sat near -0.66%, so a -0.4% floor cleanly separates fixed from regressed
+    # while staying robust to RNG noise.
+    assert stats.ev_percent > -0.4, (
+        f"Counting EV collapsed to {stats.ev_percent:.3f}% — should beat basic strategy (~-0.69%)"
+    )
+
+
+def test_true_count_stays_bounded():
+    """Running/true count must reset with the shoe — never drift to absurd values.
+
+    Deterministic regression for the mid-round-reshuffle desync, which let true
+    count reach ±48. On a 6-deck shoe at 75% penetration the true count cannot
+    realistically exceed ~±20; a desynced counter blows well past that.
+    """
+    import random
+    random.seed(20240614)
+    result = run_simulation(STANDARD_6D_H17, n_hands=100_000,
+                            starting_bankroll=1_000_000,
+                            use_counting=True, use_deviations=True)
+    max_abs_tc = max(abs(r.true_count) for r in result.records)
+    assert max_abs_tc < 25, f"True count drifted to {max_abs_tc:.1f} — counter not resetting with shoe"

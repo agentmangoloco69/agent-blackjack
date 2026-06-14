@@ -53,6 +53,10 @@ def run_simulation(
 
     shoe = Shoe(num_decks=rules.num_decks, penetration=rules.penetration)
     counter = HiLoCounter() if use_counting else None
+    if counter:
+        # Reset the running count whenever the shoe reshuffles (incl. the
+        # between-rounds reshuffle below), keeping the count synced to the shoe.
+        shoe.add_reshuffle_callback(counter.reset)
     bankroll = starting_bankroll
     result = SimResult(rules=rules, n_hands=n_hands, starting_bankroll=starting_bankroll)
 
@@ -61,9 +65,7 @@ def run_simulation(
             break
 
         if shoe.needs_reshuffle:
-            shoe.reshuffle()
-            if counter:
-                counter.reset()
+            shoe.reshuffle()   # reshuffle callback resets the counter
 
         true_count = counter.true_count(shoe.decks_remaining) if counter else 0.0
 

@@ -40,7 +40,14 @@ class Shoe:
         self.penetration = penetration
         self._cards: List[Card] = []
         self._dealt: int = 0
+        # Callbacks fired on every reshuffle — used to keep a card counter's
+        # running count in lockstep with the physical shoe (reset to 0).
+        self._reshuffle_callbacks = []
         self.reshuffle()
+
+    def add_reshuffle_callback(self, callback) -> None:
+        """Register a zero-arg callable invoked whenever the shoe is reshuffled."""
+        self._reshuffle_callbacks.append(callback)
 
     def reshuffle(self):
         self._cards = [
@@ -51,9 +58,15 @@ class Shoe:
         ]
         random.shuffle(self._cards)
         self._dealt = 0
+        for cb in self._reshuffle_callbacks:
+            cb()
 
     def deal(self) -> Card:
-        if self.needs_reshuffle:
+        # Reshuffle ONLY when physically out of cards. The penetration-based
+        # reshuffle happens between rounds (callers check needs_reshuffle), so a
+        # round always finishes on a single shoe — as in a real game. Reshuffling
+        # mid-round would desync any registered card counter from the shoe.
+        if self._dealt >= len(self._cards):
             self.reshuffle()
         card = self._cards[self._dealt]
         self._dealt += 1

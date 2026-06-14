@@ -54,14 +54,29 @@ def get_deviation(
     true_count: float,
     is_pair_of_tens: bool = False,
     is_soft: bool = False,
+    is_pair: bool = False,
 ) -> Optional[Action]:
-    """Return deviation action if applicable, else None (use basic strategy)."""
+    """Return deviation action if applicable, else None (use basic strategy).
+
+    The Illustrious 18 / Fab 4 entries here are all *hard-total* deviations, so:
+      - Soft hands never deviate (a soft 16 is A,5 — not the hard 16 the table
+        means). Returning None lets basic strategy hit it correctly.
+      - Pair hands defer to basic-strategy split logic, EXCEPT the explicit
+        split-tens deviation (total_code 20), which is keyed on is_pair_of_tens.
+    """
+    if is_soft:
+        return None
     for total_code, upcard, threshold, direction, action in ALL_DEVIATIONS:
         if upcard != dealer_upcard:
             continue
         if total_code == 'INSURANCE':
             continue  # handled separately in engine
-        if total_code == 20 and not is_pair_of_tens:
+        if total_code == 20:
+            if not is_pair_of_tens:
+                continue
+        elif is_pair:
+            # Hard-total deviation, but this is a pair — let basic strategy
+            # decide whether to split (e.g. don't "stand 12" on a pair of 6s).
             continue
         if isinstance(total_code, int) and total_code != player_total:
             continue

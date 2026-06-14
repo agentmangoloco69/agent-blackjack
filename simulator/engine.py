@@ -228,6 +228,7 @@ def _play_player_hands(
                     true_count=true_count,
                     is_pair_of_tens=is_pair_tens,
                     is_soft=hand.is_soft,
+                    is_pair=hand.is_pair,
                 )
 
             if action is None:
