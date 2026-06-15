@@ -267,13 +267,29 @@ def bankroll_hint(bankroll, unit):
     return f"= {bankroll / unit:.0f} units"
 
 
+def _num(value, default, cast=float):
+    """Coerce a UI input to a number, falling back to default for empty/None.
+
+    dcc.Input(type="number") yields None when the field is blank or mid-edit;
+    int(None)/float(None) would crash, so every numeric input is coerced here.
+    """
+    try:
+        if value is None or value == "":
+            return cast(default)
+        return cast(value)
+    except (TypeError, ValueError):
+        return cast(default)
+
+
 def _build_ruleset(decks, h17, bjpays, surrender, pen, das, rsa, peek, maxsplits, free_bet=False):
+    # Penetration must stay in RuleSet's valid range or its assertion trips.
+    pen = min(0.95, max(0.5, _num(pen, 0.75, float)))
     return RuleSet(
-        num_decks=int(decks), dealer_hits_soft_17=bool(h17),
-        blackjack_pays=float(bjpays), surrender=surrender,
-        penetration=float(pen), double_after_split=bool(das),
+        num_decks=_num(decks, 6, int), dealer_hits_soft_17=bool(h17),
+        blackjack_pays=_num(bjpays, 1.5, float), surrender=surrender or "late",
+        penetration=pen, double_after_split=bool(das),
         resplit_aces=bool(rsa), dealer_peeks=bool(peek),
-        max_splits=int(maxsplits), free_bet=free_bet,
+        max_splits=max(1, _num(maxsplits, 3, int)), free_bet=free_bet,
     )
 
 
@@ -290,7 +306,7 @@ def _build_ramp(rows, unit):
     # Floor: counts below the lowest TC row bet that row's multiplier.
     lowest_tc = min(ramp)
     ramp[-99] = ramp[lowest_tc]
-    return BetRamp(unit=float(unit), ramp=ramp)
+    return BetRamp(unit=_num(unit, DEFAULT_UNIT, float), ramp=ramp)
 
 
 @app.callback(
@@ -315,8 +331,10 @@ def run_analysis(n_clicks, decks, h17, bjpays, surrender, pen, das, rsa, peek,
 
     a = analyze_spread(
         rules, ramp,
-        starting_bankroll=float(bankroll), n_hands=int(nhands), n_runs=int(nruns),
-        hands_per_hour=int(hph),
+        starting_bankroll=_num(bankroll, DEFAULT_BANKROLL, float),
+        n_hands=max(100, _num(nhands, 2000, int)),
+        n_runs=max(1, _num(nruns, 500, int)),
+        hands_per_hour=max(1, _num(hph, DEFAULT_HPH, int)),
     )
 
     ev_children = _value_with_ci(f"{a.ev_percent:+.3f}%", f"± {a.ev_percent_ci95:.3f}%")
