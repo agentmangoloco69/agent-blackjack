@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "blackjack-dashboard",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "app.app"],
+      "port": 8050
+    }
+  ]
+}

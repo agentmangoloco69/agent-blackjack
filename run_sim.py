@@ -3,7 +3,7 @@ from simulator.rules import STANDARD_6D_H17
 from simulator.simulator import run_simulation
 from simulator.stats import compute_stats
 
-random.seed(42)
+random.seed(690)
 result = run_simulation(
     STANDARD_6D_H17,
     n_hands=100_000,
