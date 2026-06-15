@@ -3,6 +3,7 @@
 
 dash>=3.0          # web dashboard (app/)
 plotly>=6.0        # charts (pulled in by dash, pinned for clarity)
+numpy>=1.26        # optional: precise bootstrap RoR (simulator/ruin_simulation.py)
 
 # Dev / testing
 pytest>=8.0
