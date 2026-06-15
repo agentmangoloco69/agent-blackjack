@@ -19,8 +19,11 @@ def test_analyze_spread_shapes_and_sanity():
     # Percentile ordering: low <= median <= high at every point.
     for lo, mid, hi in zip(a.pct_low, a.pct_median, a.pct_high):
         assert lo <= mid <= hi
-    # RoR is a probability.
+    # RoR is a probability, and the edge-CI bounds bracket the point estimate.
     assert 0.0 <= a.risk_of_ruin <= 1.0
+    assert 0.0 <= a.risk_of_ruin_low <= 1.0
+    assert 0.0 <= a.risk_of_ruin_high <= 1.0
+    assert a.risk_of_ruin_low <= a.risk_of_ruin_high + 1e-9
     # Hourly EV is per-hand EV times hands/hour.
     assert abs(a.ev_per_hour - a.ev_per_hand_dollars * a.hands_per_hour) < 1e-6
     # Confidence half-widths are non-negative and scale consistently.

@@ -1,0 +1,9 @@
+# Runtime dependencies for the Blackjack simulator + dashboard.
+# Install with:  python -m pip install -r requirements.txt
+
+dash>=3.0          # web dashboard (app/)
+plotly>=6.0        # charts (pulled in by dash, pinned for clarity)
+numpy>=1.26        # vectorised Risk-of-Ruin bootstrap (simulator/analysis.py)
+
+# Dev / testing
+pytest>=8.0

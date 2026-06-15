@@ -3,7 +3,8 @@
 Sits on top of the single-run :func:`run_simulation`. Runs many independent
 simulations of the same game/spread to produce:
 
-  * Simulation-based Risk of Ruin (fraction of runs whose bankroll hits <= 0)
+  * Lifetime Risk of Ruin (bootstrap: resample real per-round results and walk
+    each trial's bankroll until it busts or escapes — count busts / trials)
   * Expected value (per hand %, per hand $, per hour $)
   * N0 (hands needed for cumulative EV to equal one standard deviation)
   * Percentile bankroll bands (median + 10th/90th) for a trajectory chart
@@ -11,12 +12,19 @@ simulations of the same game/spread to produce:
 The single-run engine is left untouched — this module only orchestrates it.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+import numpy as np
 
 from .rules import RuleSet
 from .counting import BetRamp
 from .simulator import run_simulation, SimResult
+
+
+# Cap on how many per-round results we keep to resample from for Risk of Ruin.
+RUIN_POOL_CAP = 400_000
 
 
 # Hard cap on total work to keep the UI responsive: n_runs * n_hands.
@@ -48,7 +56,9 @@ class SpreadAnalysis:
     ev_per_hour_ci95: float      # +/- on ev_per_hour ($)
 
     # Risk
-    risk_of_ruin: float          # fraction of runs that went broke (0..1)
+    risk_of_ruin: float          # lifetime probability of ruin at the point edge (0..1)
+    risk_of_ruin_low: float      # RoR at the optimistic edge (EV upper CI)
+    risk_of_ruin_high: float     # RoR at the pessimistic edge (EV lower CI)
     n0: float                    # hands for cumulative EV == 1 std dev
     std_dev_per_hand: float      # std dev of per-round net ($)
 
@@ -120,6 +130,65 @@ def _percentile(sorted_vals: List[float], q: float) -> float:
     return sorted_vals[lo] * (1 - frac) + sorted_vals[hi] * frac
 
 
+def _simulate_ruin(pool: np.ndarray, bankroll: float, mu: float, var: float,
+                   n_trials: int = 3000, escape_eps: float = 0.005,
+                   chunk: int = 6000, max_steps: int = 40_000,
+                   seed: Optional[int] = None) -> float:
+    """Lifetime Risk of Ruin by bootstrap, matching the standard RoR formula.
+
+    Runs ``n_trials`` independent bankroll walks. Each step draws a real per-round
+    result from ``pool`` (so split/double fat tails are preserved) and adds it to
+    the trial's bankroll. A trial ends when it busts (<= 0) or "escapes" — reaches
+    a bankroll high enough that its remaining ruin probability is below
+    ``escape_eps`` (derived from the gambler's-ruin relation exp(-2*mu*b/var)).
+    RoR is busts / trials. Trials still running at ``max_steps`` contribute their
+    residual analytic ruin probability, so the estimate isn't biased by the cap.
+
+    With a non-positive edge, eventual ruin is certain, so RoR = 1.
+    """
+    if pool.size == 0 or var <= 0:
+        return 1.0 if mu <= 0 else 0.0
+    if mu <= 0:
+        return 1.0  # a non-positive edge means eventual ruin is certain
+
+    # Evaluate RoR at the target edge `mu` by shifting the resampled pool's mean
+    # to mu while preserving its shape and variance (sensitivity to the edge).
+    pool = pool - pool.mean() + mu
+
+    escape_level = var / (2 * mu) * math.log(1 / escape_eps)
+    if bankroll >= escape_level:
+        return math.exp(-2 * mu * bankroll / var)
+
+    rng = np.random.default_rng(seed)
+    bank = np.full(n_trials, float(bankroll))
+    active = np.ones(n_trials, dtype=bool)
+    ruined = np.zeros(n_trials, dtype=bool)
+
+    steps = 0
+    while active.any() and steps < max_steps:
+        idx = np.nonzero(active)[0]
+        draws = rng.choice(pool, size=(idx.size, chunk))
+        cum = bank[idx][:, None] + np.cumsum(draws, axis=1)
+        ruin_hit = cum <= 0
+        esc_hit = cum >= escape_level
+        any_ruin = ruin_hit.any(axis=1)
+        any_esc = esc_hit.any(axis=1)
+        # First-passage: whichever of ruin/escape happens first within the chunk.
+        first_ruin = np.where(any_ruin, ruin_hit.argmax(axis=1), chunk + 1)
+        first_esc = np.where(any_esc, esc_hit.argmax(axis=1), chunk + 1)
+        became_ruined = any_ruin & (first_ruin <= first_esc)
+        became_escaped = any_esc & (first_esc < first_ruin)
+        ruined[idx[became_ruined]] = True
+        active[idx[became_ruined | became_escaped]] = False
+        still = ~(became_ruined | became_escaped)
+        bank[idx[still]] = cum[still, -1]
+        steps += chunk
+
+    # Trials still alive at the cap: add their residual (analytic) ruin probability.
+    residual = float(np.exp(-2 * mu * bank[active] / var).sum()) if active.any() else 0.0
+    return (int(ruined.sum()) + residual) / n_trials
+
+
 def analyze_spread(
     rules: RuleSet,
     bet_ramp: BetRamp,
@@ -145,12 +214,14 @@ def analyze_spread(
     # Clamp total work.
     n_runs = clamp_runs(n_runs, n_hands)
 
-    ruined = 0
     # Streaming accumulators for per-round net (EV / variance).
     net_sum = 0.0
     net_sumsq = 0.0
     net_count = 0
     wager_sum = 0.0
+
+    # Pool of real per-round nets to resample from for Risk of Ruin.
+    ruin_pool: List[float] = []
 
     # Matrix of bankroll trajectories: n_runs rows x n_hands cols.
     trajectories: List[List[float]] = []
@@ -174,8 +245,8 @@ def analyze_spread(
         net_count += len(round_nets)
         wager_sum += sum(round_wagers)
 
-        if min(bankroll_by_round) <= 0:
-            ruined += 1
+        if len(ruin_pool) < RUIN_POOL_CAP:
+            ruin_pool.extend(round_nets)
 
         trajectories.append(bankroll_by_round)
 
@@ -207,7 +278,17 @@ def analyze_spread(
     else:
         n0 = float('inf')
 
-    risk_of_ruin = ruined / n_runs if n_runs else 0.0
+    # Lifetime Risk of Ruin: bootstrap-resample real per-round results and walk
+    # each trial's bankroll until it busts or escapes (count busts / trials).
+    # RoR is acutely sensitive to the (noisily-estimated) edge, so report it at
+    # the optimistic / point / pessimistic edge across the EV confidence interval.
+    pool_arr = np.asarray(ruin_pool, dtype=float)
+    se_per_hand = (std_dev / (net_count ** 0.5)) if net_count > 1 else 0.0
+    edge_lo = ev_per_hand - 1.96 * se_per_hand   # pessimistic edge -> higher RoR
+    edge_hi = ev_per_hand + 1.96 * se_per_hand   # optimistic edge -> lower RoR
+    risk_of_ruin = _simulate_ruin(pool_arr, starting_bankroll, ev_per_hand, variance, seed=0)
+    risk_of_ruin_low = _simulate_ruin(pool_arr, starting_bankroll, edge_hi, variance, seed=1)
+    risk_of_ruin_high = _simulate_ruin(pool_arr, starting_bankroll, edge_lo, variance, seed=2)
 
     # --- Percentile bands (downsample x-axis to chart_points) ---
     hand_axis: List[int] = []
@@ -239,6 +320,8 @@ def analyze_spread(
         ev_percent_ci95=ev_percent_ci95,
         ev_per_hour_ci95=ev_per_hour_ci95,
         risk_of_ruin=risk_of_ruin,
+        risk_of_ruin_low=risk_of_ruin_low,
+        risk_of_ruin_high=risk_of_ruin_high,
         n0=n0,
         std_dev_per_hand=std_dev,
         hand_axis=hand_axis,
