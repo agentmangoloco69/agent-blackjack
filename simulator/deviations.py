@@ -20,15 +20,15 @@ ILLUSTRIOUS_18: List[DeviationEntry] = [
     ('INSURANCE', 0,  3.0, '+', Action.HIT),  # 'HIT' placeholder — engine interprets as "take insurance"
     (16, 10,  0.0, '+', Action.STAND),
     (15, 10,  4.0, '+', Action.STAND),
-    (20,  5,  4.0, '+', Action.SPLIT),         # split 10s vs 5 (aggressive)
-    (20,  6,  4.0, '+', Action.SPLIT),         # split 10s vs 6
+    (20,  5,  5.0, '+', Action.SPLIT),         # split 10s vs 5 at TC>=+5
+    (20,  6,  4.0, '+', Action.SPLIT),         # split 10s vs 6 at TC>=+4
     (10, 10,  4.0, '+', Action.DOUBLE),
     (12,  3,  2.0, '+', Action.STAND),
     (12,  2,  3.0, '+', Action.STAND),
     (11, 11,  1.0, '+', Action.DOUBLE),
     (9,   2,  1.0, '+', Action.DOUBLE),
     (10, 11,  4.0, '+', Action.DOUBLE),
-    (9,   7, -1.0, '-', Action.HIT),           # don't double 9v7 at negative count
+    (9,   7,  3.0, '+', Action.DOUBLE),         # double 9v7 at TC>=+3
     (16,  9,  5.0, '+', Action.STAND),
     (13,  2, -1.0, '-', Action.HIT),
     (12,  4,  0.0, '+', Action.STAND),

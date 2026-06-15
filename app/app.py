@@ -170,7 +170,7 @@ controls = html.Div([
             id="nhands", type="number", value=2000, min=100, max=100000, step=500,
             style={"width": "100%"})), style={"flex": 1}),
         html.Div(_field("Runs", dcc.Input(
-            id="nruns", type="number", value=100, min=10, max=1000, step=10,
+            id="nruns", type="number", value=500, min=10, max=1000, step=10,
             style={"width": "100%"})), style={"flex": 1}),
     ], style={"display": "flex", "gap": "10px"}),
 
@@ -319,16 +319,26 @@ def run_analysis(n_clicks, decks, h17, bjpays, surrender, pen, das, rsa, peek,
         hands_per_hour=int(hph),
     )
 
-    ev_str = f"{a.ev_percent:+.3f}%"
-    evhr_str = f"${a.ev_per_hour:+,.2f}"
+    ev_children = _value_with_ci(f"{a.ev_percent:+.3f}%", f"± {a.ev_percent_ci95:.3f}%")
+    evhr_children = _value_with_ci(f"${a.ev_per_hour:+,.2f}", f"± ${a.ev_per_hour_ci95:,.2f}")
     ror_str = f"{a.risk_of_ruin * 100:.1f}%"
     n0_str = "∞" if a.n0 == float("inf") else f"{a.n0:,.0f}"
 
     fig = _make_figure(a)
     note = (f"{a.n_runs:,} runs × {a.n_hands:,} hands · "
             f"std dev ${a.std_dev_per_hand:,.0f}/hand · "
+            f"EV shown with 95% confidence interval · "
             f"bands show 10th–90th percentile bankroll, line is the median.")
-    return ev_str, evhr_str, ror_str, n0_str, fig, note
+    return ev_children, evhr_children, ror_str, n0_str, fig, note
+
+
+def _value_with_ci(value, ci):
+    """Big metric value with a smaller, muted confidence-interval suffix."""
+    return html.Span([
+        value,
+        html.Span(f"  {ci}", style={"fontSize": "14px", "fontWeight": 500,
+                                     "color": "#6b7785"}),
+    ])
 
 
 def _make_figure(a):
@@ -359,4 +369,8 @@ def _make_figure(a):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 8050))
+    # use_reloader=False: avoids the Werkzeug parent/child reloader spawning an
+    # orphan process that keeps holding the port.
+    app.run(debug=True, port=port, use_reloader=False)

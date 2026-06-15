@@ -45,10 +45,17 @@ def play_hand(
             counter.update(card)
 
     # --- Initial deal ---
+    # The dealer's hole card is dealt FACE DOWN: it must not be counted here.
+    # A player can't see it, and it is counted at every point it's later
+    # revealed (dealer-BJ branches and before the dealer draws). Counting it now
+    # would both leak it into this round's deviations and double-count it
+    # (corrupting the running count for every subsequent hand).
     player = Hand(bet=bet)
     dealer = Hand()
-    deal_card(player); deal_card(dealer)
-    deal_card(player); deal_card(dealer)
+    deal_card(player); deal_card(dealer)   # player card 1, dealer upcard
+    deal_card(player)                      # player card 2
+    hole_card = shoe.deal()                # dealer hole card — dealt, not counted
+    dealer.add(hole_card)
 
     dealer_upcard = dealer.cards[0].value # hole-card hidden
     dealer_upcard_key = min(dealer_upcard, 11)  # 10 for J/Q/K/10, 11 for Ace
@@ -230,6 +237,16 @@ def _play_player_hands(
                     is_soft=hand.is_soft,
                     is_pair=hand.is_pair,
                 )
+
+            # A deviation may return an action that isn't legal right now — e.g. a
+            # SPLIT on a pair of 10s once the resplit limit is reached, or a
+            # DOUBLE/SURRENDER after the first two cards. Discard it and fall back
+            # to basic strategy, rather than letting it fall through to the HIT at
+            # the bottom of the loop (which would, catastrophically, hit a 20).
+            if (action == Action.SPLIT and not can_split) or \
+               (action == Action.DOUBLE and not can_double) or \
+               (action == Action.SURRENDER and not can_surrender):
+                action = None
 
             if action is None:
                 action = get_action(

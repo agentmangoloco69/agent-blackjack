@@ -43,6 +43,10 @@ class SpreadAnalysis:
     ev_per_hour: float           # ev_per_hand_dollars * hands_per_hour
     hands_per_hour: int
 
+    # EV precision (95% confidence half-widths — EV is "value +/- ci")
+    ev_percent_ci95: float       # +/- on ev_percent
+    ev_per_hour_ci95: float      # +/- on ev_per_hour ($)
+
     # Risk
     risk_of_ruin: float          # fraction of runs that went broke (0..1)
     n0: float                    # hands for cumulative EV == 1 std dev
@@ -186,6 +190,17 @@ def analyze_spread(
     ev_percent = (net_sum / wager_sum * 100) if wager_sum else 0.0
     ev_per_hour = ev_per_hand * hands_per_hour
 
+    # 95% confidence half-widths on the EV estimates. The per-round nets are the
+    # samples; SE of the mean = std / sqrt(N). Scale that SE into each EV unit.
+    if net_count > 1 and std_dev > 0:
+        se_per_hand = std_dev / (net_count ** 0.5)
+        ev_per_hour_ci95 = 1.96 * se_per_hand * hands_per_hour
+        mean_wager = wager_sum / net_count
+        ev_percent_ci95 = (1.96 * se_per_hand / mean_wager * 100) if mean_wager else 0.0
+    else:
+        ev_per_hour_ci95 = 0.0
+        ev_percent_ci95 = 0.0
+
     # N0 = (std / ev)^2  — hands for cumulative EV to equal one std dev.
     if ev_per_hand > 0 and std_dev > 0:
         n0 = (std_dev / ev_per_hand) ** 2
@@ -221,6 +236,8 @@ def analyze_spread(
         ev_percent=ev_percent,
         ev_per_hour=ev_per_hour,
         hands_per_hour=hands_per_hour,
+        ev_percent_ci95=ev_percent_ci95,
+        ev_per_hour_ci95=ev_per_hour_ci95,
         risk_of_ruin=risk_of_ruin,
         n0=n0,
         std_dev_per_hand=std_dev,

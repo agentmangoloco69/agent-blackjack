@@ -23,6 +23,8 @@ def test_analyze_spread_shapes_and_sanity():
     assert 0.0 <= a.risk_of_ruin <= 1.0
     # Hourly EV is per-hand EV times hands/hour.
     assert abs(a.ev_per_hour - a.ev_per_hand_dollars * a.hands_per_hour) < 1e-6
+    # Confidence half-widths are non-negative and scale consistently.
+    assert a.ev_percent_ci95 >= 0 and a.ev_per_hour_ci95 >= 0
 
 
 def test_analyze_spread_ev_beats_basic_and_n0_finite():
