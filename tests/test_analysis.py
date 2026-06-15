@@ -19,11 +19,9 @@ def test_analyze_spread_shapes_and_sanity():
     # Percentile ordering: low <= median <= high at every point.
     for lo, mid, hi in zip(a.pct_low, a.pct_median, a.pct_high):
         assert lo <= mid <= hi
-    # RoR is a probability, and the edge-CI bounds bracket the point estimate.
+    # Both the analytic and empirical RoR are probabilities.
     assert 0.0 <= a.risk_of_ruin <= 1.0
-    assert 0.0 <= a.risk_of_ruin_low <= 1.0
-    assert 0.0 <= a.risk_of_ruin_high <= 1.0
-    assert a.risk_of_ruin_low <= a.risk_of_ruin_high + 1e-9
+    assert 0.0 <= a.risk_of_ruin_empirical <= 1.0
     # Hourly EV is per-hand EV times hands/hour.
     assert abs(a.ev_per_hour - a.ev_per_hand_dollars * a.hands_per_hour) < 1e-6
     # Confidence half-widths are non-negative and scale consistently.
@@ -46,6 +44,21 @@ def test_analyze_spread_ev_beats_basic_and_n0_finite():
     assert a.ev_percent > -0.4, f"EV collapsed to {a.ev_percent:.3f}%"
     # N0 is positive when EV is positive, and inf otherwise (undefined) — never <= 0.
     assert a.n0 > 0
+
+
+def test_analytic_ror_formula_and_bankroll_sensitivity():
+    """Analytic RoR matches exp(-2*mu*B/var) and falls as the bankroll grows."""
+    import math
+    from simulator.analysis import _analytic_ror
+    mu, var = 0.10, 4000.0
+    assert abs(_analytic_ror(10_000, mu, var) - math.exp(-2 * mu * 10_000 / var)) < 1e-12
+    # Strictly decreasing in bankroll (this is what "registers" when B changes).
+    rors = [_analytic_ror(b, mu, var) for b in (5_000, 10_000, 25_000, 50_000)]
+    assert rors == sorted(rors, reverse=True)
+    assert rors[0] > rors[-1]
+    # Non-positive edge -> certain ruin.
+    assert _analytic_ror(10_000, 0.0, var) == 1.0
+    assert _analytic_ror(10_000, -0.05, var) == 1.0
 
 
 def test_work_cap_clamps_runs():

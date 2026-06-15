@@ -340,20 +340,19 @@ def run_analysis(n_clicks, decks, h17, bjpays, surrender, pen, das, rsa, peek,
     ev_children = _value_with_ci(f"{a.ev_percent:+.3f}%", f"± {a.ev_percent_ci95:.3f}%")
     evhr_children = _value_with_ci(f"${a.ev_per_hour:+,.2f}", f"± ${a.ev_per_hour_ci95:,.2f}")
 
-    # Lifetime RoR is acutely sensitive to the (noisy) edge, so show the point
-    # estimate with the range across the EV confidence interval beneath it. When
-    # the edge is well-determined the bounds nearly coincide.
-    lo, hi = a.risk_of_ruin_low * 100, a.risk_of_ruin_high * 100
-    if hi - lo < 1.0:
-        ror_children = f"{a.risk_of_ruin * 100:.0f}%"
-    else:
-        ror_children = _value_with_ci(f"{a.risk_of_ruin * 100:.0f}%", f"{lo:.0f}–{hi:.0f}%")
+    # Analytic lifetime RoR (headline, 2 decimals) with the empirical
+    # "fraction of runs that dipped <= 0 over n_hands" shown beneath it.
+    ror_children = _value_with_ci(
+        f"{a.risk_of_ruin * 100:.2f}%",
+        f"sim: {a.risk_of_ruin_empirical * 100:.2f}%",
+    )
     n0_str = "∞" if a.n0 == float("inf") else f"{a.n0:,.0f}"
 
     fig = _make_figure(a)
     note = (f"{a.n_runs:,} runs × {a.n_hands:,} hands · "
             f"std dev ${a.std_dev_per_hand:,.0f}/hand · "
-            f"EV & RoR shown across the 95% confidence interval · "
+            f"RoR is the analytic lifetime risk; 'sim' is the share of runs that "
+            f"dipped to $0 within {a.n_hands:,} hands · "
             f"bands show 10th–90th percentile bankroll, line is the median.")
     return ev_children, evhr_children, ror_children, n0_str, fig, note
 
