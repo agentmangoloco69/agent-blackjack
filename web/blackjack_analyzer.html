@@ -31,7 +31,6 @@
   .row > div{ flex:1; }
   select,input[type=number]{ width:100%; padding:7px 8px; border:1px solid var(--border);
     border-radius:6px; background:var(--card); color:var(--ink); font:inherit; }
-  input[type=number]{ text-align:left; }
   .hint{ font-size:12px; color:var(--muted); margin:-6px 0 12px; }
   details{ margin-bottom:12px; }
   summary{ cursor:pointer; font-weight:600; font-size:13px; color:var(--label); }
@@ -40,9 +39,9 @@
   table.spread th{ font-weight:600; background:var(--bg); padding:6px; text-align:center; }
   table.spread td{ padding:3px 4px; text-align:center; border-top:1px solid var(--border); }
   table.spread td.amt{ color:var(--muted); }
-  table.spread input{ width:70px; padding:4px; text-align:center; }
+  table.spread input{ width:72px; padding:4px; text-align:center; }
   .xbtn{ cursor:pointer; color:var(--muted); border:none; background:none; font-size:15px; }
-  .smallbtn{ font-size:12px; margin:8px 0 12px; padding:4px 8px; cursor:pointer;
+  .smallbtn{ font-size:12px; margin:8px 6px 12px 0; padding:5px 10px; cursor:pointer;
     border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--ink); }
   #run{ width:100%; padding:12px; font-size:15px; font-weight:600; background:var(--accent);
     color:#fff; border:none; border-radius:8px; cursor:pointer; margin-top:4px; }
@@ -51,21 +50,23 @@
   .metric{ flex:1; min-width:150px; text-align:center; background:var(--card);
     border:1px solid var(--border); border-radius:10px; padding:16px; }
   .metric .t{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .metric .v{ font-size:28px; font-weight:700; margin-top:4px; }
-  .metric .ci{ font-size:14px; font-weight:500; color:var(--muted); }
-  #chartWrap{ position:relative; }
-  canvas{ width:100%; height:440px; display:block; }
+  .metric .v{ font-size:26px; font-weight:700; margin-top:4px; }
+  .metric .ci{ font-size:13px; font-weight:500; color:var(--muted); }
+  canvas{ width:100%; height:420px; display:block; }
   #note{ font-size:12px; color:var(--muted); margin-top:8px; }
   #progress{ height:6px; background:var(--border); border-radius:4px; overflow:hidden;
     margin-top:10px; display:none; }
-  #bar{ height:100%; width:0; background:var(--accent); transition:width .1s; }
+  #bar{ height:100%; width:0; background:var(--accent); }
   .warn{ font-size:12px; color:var(--muted); margin-top:10px; }
+  #errbar{ display:none; background:#b3261e; color:#fff; padding:10px 14px; border-radius:8px;
+    margin-bottom:14px; font-size:13px; font-family:ui-monospace,Menlo,Consolas,monospace; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div id="errbar"></div>
   <h1>Blackjack Bet-Spread Analyzer</h1>
-  <div class="sub">Card-counting bet-spread edge, Risk of Ruin, N0 and bankroll trajectory — runs entirely in your browser.</div>
+  <div class="sub">Card-counting edge, house edge, Risk of Ruin, N0 and bankroll trajectory &mdash; runs entirely in your browser.</div>
   <div class="cols">
     <!-- ------------------------------ CONTROLS ------------------------------ -->
     <div id="controls" class="card">
@@ -117,12 +118,13 @@
       </div>
       <div class="hint" id="unitsHint"></div>
 
-      <label class="f">Bet spread (true count → units)</label>
+      <label class="f">Bet spread (true count &rarr; units)</label>
       <table class="spread">
         <thead><tr><th></th><th>True Count</th><th>Multiplier</th><th>Bet ($)</th></tr></thead>
         <tbody id="spreadBody"></tbody>
       </table>
       <button class="smallbtn" id="addRow">+ Add row</button>
+      <button class="smallbtn" id="resetSpread">Reset to default</button>
 
       <hr>
 
@@ -137,35 +139,48 @@
 
       <button id="run">Run Analysis</button>
       <div id="progress"><div id="bar"></div></div>
-      <div class="warn">Larger Runs × Hands = more precise EV but a longer run (all in-browser).</div>
+      <div class="warn">Larger Runs &times; Hands = more precise EV but a longer run (all in-browser).</div>
     </div>
 
     <!-- ------------------------------ RESULTS ------------------------------ -->
     <div id="results" class="card">
       <div class="metrics">
-        <div class="metric"><div class="t">EV (% of action)</div><div class="v" id="mEv" style="color:var(--green)">—</div></div>
-        <div class="metric"><div class="t">EV ($/hour)</div><div class="v" id="mEvhr" style="color:var(--green)">—</div></div>
-        <div class="metric"><div class="t">Risk of Ruin</div><div class="v" id="mRor" style="color:var(--red)">—</div></div>
-        <div class="metric"><div class="t">N0 (hands)</div><div class="v" id="mN0">—</div></div>
+        <div class="metric"><div class="t">House edge (no counting)</div><div class="v" id="mHouse" style="color:var(--red)">&mdash;</div></div>
+        <div class="metric"><div class="t">EV (% of action)</div><div class="v" id="mEv" style="color:var(--green)">&mdash;</div></div>
+        <div class="metric"><div class="t">EV ($/hour)</div><div class="v" id="mEvhr" style="color:var(--green)">&mdash;</div></div>
       </div>
-      <div id="chartWrap"><canvas id="chart"></canvas></div>
+      <div class="metrics">
+        <div class="metric"><div class="t">Risk of Ruin</div><div class="v" id="mRor" style="color:var(--red)">&mdash;</div></div>
+        <div class="metric"><div class="t">N0 (hands)</div><div class="v" id="mN0">&mdash;</div></div>
+      </div>
+      <canvas id="chart"></canvas>
       <div id="note">Set your game and spread, then Run Analysis.</div>
     </div>
   </div>
 </div>
 
-<!-- ======================= SIMULATION CORE (portable) ======================= -->
-<script id="bj-core">
-(function(){
-  "use strict";
-  const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-  const VAL = {A:11,K:10,Q:10,J:10,'10':10,'9':9,'8':8,'7':7,'6':6,'5':5,'4':4,'3':3,'2':2};
-  const HILO = {'2':1,'3':1,'4':1,'5':1,'6':1,'7':0,'8':0,'9':0,'10':-1,J:-1,Q:-1,K:-1,A:-1};
-  const val = r => VAL[r];
-  const hiLo = r => HILO[r];
+<script>
+/* Show any script failure instead of dying silently (this page has no console
+   on most phones). Registered first so it catches later parse/runtime errors. */
+window.onerror = function(msg, src, line, col){
+  var e = document.getElementById('errbar');
+  if(e){ e.style.display='block';
+    e.textContent = 'Script error: ' + msg + ' (line ' + line + ':' + col + ')'; }
+  return false;
+};
+</script>
 
-  // ---- Strategy tables (6-deck, H17 base) ----
-  const HARD = {
+<!-- ======================= SIMULATION CORE (portable) =======================
+     Deliberately conservative ES2015 syntax (no globalThis / ?? / numeric
+     separators) so it runs on older mobile browsers.                        -->
+<script id="bj-core">
+(function(root){
+  "use strict";
+  var RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  var VAL = {A:11,K:10,Q:10,J:10,'10':10,'9':9,'8':8,'7':7,'6':6,'5':5,'4':4,'3':3,'2':2};
+  var HILO = {'2':1,'3':1,'4':1,'5':1,'6':1,'7':0,'8':0,'9':0,'10':-1,J:-1,Q:-1,K:-1,A:-1};
+
+  var HARD = {
     9:{2:'H',3:'D',4:'D',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     10:{2:'D',3:'D',4:'D',5:'D',6:'D',7:'D',8:'D',9:'D',10:'H',11:'H'},
     11:{2:'D',3:'D',4:'D',5:'D',6:'D',7:'D',8:'D',9:'D',10:'D',11:'D'},
@@ -173,19 +188,19 @@
     13:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'H',8:'H',9:'H',10:'H',11:'H'},
     14:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'H',8:'H',9:'H',10:'H',11:'H'},
     15:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'H',8:'H',9:'H',10:'R',11:'H'},
-    16:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'H',8:'H',9:'R',10:'R',11:'R'},
+    16:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'H',8:'H',9:'R',10:'R',11:'R'}
   };
-  const SOFT = {
+  var SOFT = {
     13:{2:'H',3:'H',4:'H',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     14:{2:'H',3:'H',4:'H',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     15:{2:'H',3:'H',4:'D',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     16:{2:'H',3:'H',4:'D',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     17:{2:'H',3:'D',4:'D',5:'D',6:'D',7:'H',8:'H',9:'H',10:'H',11:'H'},
     18:{2:'Ds',3:'Ds',4:'Ds',5:'Ds',6:'Ds',7:'S',8:'S',9:'H',10:'H',11:'H'},
-    19:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'S',8:'S',9:'S',10:'S',11:'S'},
+    19:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'S',8:'S',9:'S',10:'S',11:'S'}
   };
-  const SOFT_S17 = { 19:{6:'D'} };  // soft 19 vs 6 doubles under S17
-  const PAIRS = {
+  var SOFT_S17 = { 19:{6:'D'} };
+  var PAIRS = {
     2:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'P',8:'H',9:'H',10:'H',11:'H'},
     3:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'P',8:'H',9:'H',10:'H',11:'H'},
     4:{2:'H',3:'H',4:'H',5:'P',6:'P',7:'H',8:'H',9:'H',10:'H',11:'H'},
@@ -195,10 +210,9 @@
     8:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'P',8:'P',9:'P',10:'P',11:'P'},
     9:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'S',8:'P',9:'P',10:'S',11:'S'},
     10:{2:'S',3:'S',4:'S',5:'S',6:'S',7:'S',8:'S',9:'S',10:'S',11:'S'},
-    11:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'P',8:'P',9:'P',10:'P',11:'P'},
+    11:{2:'P',3:'P',4:'P',5:'P',6:'P',7:'P',8:'P',9:'P',10:'P',11:'P'}
   };
-  // ---- Deviations (Illustrious 18 + Fab 4), all hard-total plays ----
-  const DEVS = [
+  var DEVS = [
     ['INS',0,3.0,'+','INS'],
     [16,10,0.0,'+','S'],[15,10,4.0,'+','S'],
     [20,5,5.0,'+','P'],[20,6,4.0,'+','P'],
@@ -206,104 +220,104 @@
     [11,11,1.0,'+','D'],[9,2,1.0,'+','D'],[10,11,4.0,'+','D'],[9,7,3.0,'+','D'],
     [16,9,5.0,'+','S'],[13,2,-1.0,'-','H'],[12,4,0.0,'+','S'],
     [12,5,-2.0,'-','H'],[12,6,-1.0,'-','H'],[13,3,-2.0,'-','H'],
-    [14,10,3.0,'+','R'],[15,10,0.0,'+','R'],[15,11,1.0,'+','R'],[15,9,2.0,'+','R'],
+    [14,10,3.0,'+','R'],[15,10,0.0,'+','R'],[15,11,1.0,'+','R'],[15,9,2.0,'+','R']
   ];
 
+  function pick(v, d){ return (v === undefined || v === null) ? d : v; }
   function makeRules(o){
     o = o || {};
     return {
-      numDecks: o.numDecks ?? 6,
-      h17: o.h17 ?? true,
-      surrender: o.surrender ?? 'late',
-      das: o.das ?? true,
-      rsa: o.rsa ?? false,
-      maxSplits: o.maxSplits ?? 3,
-      blackjackPays: o.blackjackPays ?? 1.5,
-      penetration: o.penetration ?? 0.75,
-      dealerPeeks: o.dealerPeeks ?? true,
+      numDecks: pick(o.numDecks, 6),
+      h17: pick(o.h17, true),
+      surrender: pick(o.surrender, 'late'),
+      das: pick(o.das, true),
+      rsa: pick(o.rsa, false),
+      maxSplits: pick(o.maxSplits, 3),
+      blackjackPays: pick(o.blackjackPays, 1.5),
+      penetration: pick(o.penetration, 0.75),
+      dealerPeeks: pick(o.dealerPeeks, true)
     };
   }
 
-  // ---- Hand ----
-  class Hand{
-    constructor(bet){ this.cards=[]; this.bet=bet||0; this.doubled=false;
-      this.surrendered=false; this.splitFrom=null; }
-    value(){ let t=0,a=0; for(const r of this.cards){ if(r==='A'){a++;t+=11;} else t+=VAL[r]; }
-      while(t>21&&a){t-=10;a--;} return t; }
-    isSoft(){ let has=false,hard=0; for(const r of this.cards){ if(r==='A'){has=true;hard+=1;} else hard+=VAL[r]; }
-      return has && hard+10<=21; }
-    isBust(){ return this.value()>21; }
-    isBlackjack(){ return this.cards.length===2 && this.value()===21; }
-    isPair(){ return this.cards.length===2 && VAL[this.cards[0]]===VAL[this.cards[1]]; }
-  }
+  function Hand(bet){ this.cards=[]; this.bet=bet||0; this.doubled=false;
+    this.surrendered=false; this.splitFrom=null; }
+  Hand.prototype.value=function(){ var t=0,a=0,i,r;
+    for(i=0;i<this.cards.length;i++){ r=this.cards[i];
+      if(r==='A'){a++;t+=11;} else t+=VAL[r]; }
+    while(t>21&&a){t-=10;a--;} return t; };
+  Hand.prototype.isSoft=function(){ var has=false,hard=0,i,r;
+    for(i=0;i<this.cards.length;i++){ r=this.cards[i];
+      if(r==='A'){has=true;hard+=1;} else hard+=VAL[r]; }
+    return has && hard+10<=21; };
+  Hand.prototype.isBust=function(){ return this.value()>21; };
+  Hand.prototype.isBlackjack=function(){ return this.cards.length===2 && this.value()===21; };
+  Hand.prototype.isPair=function(){ return this.cards.length===2 &&
+    VAL[this.cards[0]]===VAL[this.cards[1]]; };
 
-  // ---- Shoe ----
-  class Shoe{
-    constructor(numDecks, pen){ this.numDecks=numDecks; this.pen=pen; this.counter=null;
-      this.cards=[]; this.dealt=0; this._build(); }
-    _build(){
-      const c=[]; for(let d=0;d<this.numDecks;d++) for(let s=0;s<4;s++) for(const r of RANKS) c.push(r);
-      // Fisher-Yates
-      for(let i=c.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; const t=c[i];c[i]=c[j];c[j]=t; }
-      this.cards=c; this.dealt=0;
-      if(this.counter) this.counter.reset();
-    }
-    reshuffle(){ this._build(); }
-    deal(){ if(this.dealt>=this.cards.length) this._build(); return this.cards[this.dealt++]; }
-    get needsReshuffle(){ return this.dealt >= this.cards.length*this.pen; }
-    get decksRemaining(){ return (this.cards.length-this.dealt)/52; }
-  }
+  function Shoe(numDecks,pen){ this.numDecks=numDecks; this.pen=pen; this.counter=null;
+    this.cards=[]; this.dealt=0; this._build(); }
+  Shoe.prototype._build=function(){
+    var c=[],d,s,i,j,t;
+    for(d=0;d<this.numDecks;d++) for(s=0;s<4;s++) for(i=0;i<RANKS.length;i++) c.push(RANKS[i]);
+    for(i=c.length-1;i>0;i--){ j=(Math.random()*(i+1))|0; t=c[i];c[i]=c[j];c[j]=t; }
+    this.cards=c; this.dealt=0;
+    if(this.counter) this.counter.reset();
+  };
+  Shoe.prototype.reshuffle=function(){ this._build(); };
+  Shoe.prototype.deal=function(){ if(this.dealt>=this.cards.length) this._build();
+    return this.cards[this.dealt++]; };
+  Object.defineProperty(Shoe.prototype,'needsReshuffle',{get:function(){
+    return this.dealt >= this.cards.length*this.pen; }});
+  Object.defineProperty(Shoe.prototype,'decksRemaining',{get:function(){
+    return (this.cards.length-this.dealt)/52; }});
 
-  class Counter{
-    constructor(){ this.rc=0; }
-    update(r){ this.rc+=HILO[r]; }
-    reset(){ this.rc=0; }
-    trueCount(decksRem){ if(decksRem<=0) return 0;
-      const est=Math.max(0.5, Math.round(decksRem*2)/2); return this.rc/est; }
-  }
+  function Counter(){ this.rc=0; }
+  Counter.prototype.update=function(r){ this.rc+=HILO[r]; };
+  Counter.prototype.reset=function(){ this.rc=0; };
+  Counter.prototype.trueCount=function(decksRem){ if(decksRem<=0) return 0;
+    var est=Math.max(0.5, Math.round(decksRem*2)/2); return this.rc/est; };
 
-  class BetRamp{
-    constructor(unit, ramp){ this.unit=unit; this.ramp=ramp;
-      this.keys=Object.keys(ramp).map(Number).sort((a,b)=>a-b); }
-    betSize(tc){ const t=Math.trunc(tc); let best=null;
-      for(const k of this.keys){ if(k<=t) best=k; else break; }
-      return best===null ? this.unit : this.ramp[best]*this.unit; }
-  }
+  function BetRamp(unit,ramp){ this.unit=unit; this.ramp=ramp;
+    this.keys=Object.keys(ramp).map(Number).sort(function(a,b){return a-b;}); }
+  BetRamp.prototype.betSize=function(tc){ var t=Math.trunc(tc), best=null, i;
+    for(i=0;i<this.keys.length;i++){ if(this.keys[i]<=t) best=this.keys[i]; else break; }
+    return best===null ? this.unit : this.ramp[best]*this.unit; };
 
-  // ---- Strategy ----
   function softLookup(st,d,h17){ if(!h17 && SOFT_S17[st] && SOFT_S17[st][d]) return SOFT_S17[st][d];
     return (SOFT[st]&&SOFT[st][d]) || 'H'; }
-  function lookupAction(hand,d,rules){
+  function lookupAction(hand,d){
     if(hand.isSoft() && hand.value()<=21) return (SOFT[hand.value()]&&SOFT[hand.value()][d])||'H';
-    const t=hand.value(); if(t<=8) return 'H'; if(t>=17) return 'S';
+    var t=hand.value(); if(t<=8) return 'H'; if(t>=17) return 'S';
     return (HARD[t]&&HARD[t][d])||'H';
   }
   function getAction(hand,d,rules,canSurr,canDouble,canSplit){
+    var pv,a,st,t;
     if(hand.isPair() && canSplit){
-      let pv=VAL[hand.cards[0]]; if(pv!==11) pv=Math.min(pv,10);
-      const a=(PAIRS[pv]&&PAIRS[pv][d])||'H'; if(a==='P') return 'P';
+      pv=VAL[hand.cards[0]]; if(pv!==11) pv=Math.min(pv,10);
+      a=(PAIRS[pv]&&PAIRS[pv][d])||'H'; if(a==='P') return 'P';
     }
     if(canSurr && rules.surrender!=='none' && hand.cards.length===2){
-      if(lookupAction(hand,d,rules)==='R') return 'R';
+      if(lookupAction(hand,d)==='R') return 'R';
     }
     if(hand.isSoft() && hand.value()<=21){
-      const st=hand.value(); if(st>=20) return 'S';
-      let a=softLookup(st,d,rules.h17);
+      st=hand.value(); if(st>=20) return 'S';
+      a=softLookup(st,d,rules.h17);
       if(a==='Ds') a = canDouble ? 'D' : 'S';
       else if(a==='D'){ if(!canDouble) a='H'; }
       return a;
     }
-    const t=hand.value();
+    t=hand.value();
     if(t<=8) return 'H'; if(t>=17) return 'S';
-    let a=(HARD[t]&&HARD[t][d])||'H';
+    a=(HARD[t]&&HARD[t][d])||'H';
     if(a==='D' && !canDouble) a='H';
     if(a==='R' && (rules.surrender==='none' || !canSurr)) a='H';
     return a;
   }
   function getDeviation(total,d,tc,isPairTens,isSoft,isPair){
     if(isSoft) return null;
-    for(const e of DEVS){
-      const code=e[0], up=e[1], thr=e[2], dir=e[3], act=e[4];
+    var i,e,code,up,thr,dir,act;
+    for(i=0;i<DEVS.length;i++){
+      e=DEVS[i]; code=e[0]; up=e[1]; thr=e[2]; dir=e[3]; act=e[4];
       if(up!==d) continue;
       if(code==='INS') continue;
       if(code===20){ if(!isPairTens) continue; }
@@ -314,34 +328,36 @@
     }
     return null;
   }
-  const shouldTakeInsurance = tc => tc>=3;
+  function shouldTakeInsurance(tc){ return tc>=3; }
 
-  // ---- Engine ----
   function playPlayerHands(shoe,rules,initial,d,counter,useDev,tc){
-    const dealTo=h=>{ const r=shoe.deal(); h.cards.push(r); if(counter)counter.update(r); };
-    const queue=[[initial,0]]; const finished=[];
+    function dealTo(h){ var r=shoe.deal(); h.cards.push(r); if(counter)counter.update(r); }
+    var queue=[[initial,0]], finished=[], item, hand, depth, isSplitAces, cur,
+        canSplit, canDouble, canSurr, action, isPairTens, c1, c2, h1, h2;
     while(queue.length){
-      const [hand,depth]=queue.shift();
-      const isSplitAces = hand.splitFrom && hand.cards[0]==='A';
+      item=queue.shift(); hand=item[0]; depth=item[1];
+      isSplitAces = !!hand.splitFrom && hand.cards[0]==='A';
       if(isSplitAces){ finished.push(hand); continue; }
-      let cur=hand;
+      cur=hand;
       while(true){
-        const canSplit = cur.isPair() && depth<rules.maxSplits && !isSplitAces;
-        const canDouble = cur.cards.length===2 && (depth===0 || rules.das);
-        const canSurr = cur.cards.length===2 && depth===0;
-        let action=null;
+        canSplit = cur.isPair() && depth<rules.maxSplits && !isSplitAces;
+        canDouble = cur.cards.length===2 && (depth===0 || rules.das);
+        canSurr = cur.cards.length===2 && depth===0;
+        action=null;
         if(useDev && counter){
-          const isPairTens = cur.isPair() && VAL[cur.cards[0]]===10;
+          isPairTens = cur.isPair() && VAL[cur.cards[0]]===10;
           action=getDeviation(cur.value(),d,tc,isPairTens,cur.isSoft(),cur.isPair());
         }
         if(action==='INS') action=null;
+        /* Discard a deviation that isn't legal right now, rather than falling
+           through to a HIT (which would catastrophically hit a 20). */
         if((action==='P'&&!canSplit)||(action==='D'&&!canDouble)||(action==='R'&&!canSurr)) action=null;
         if(action===null) action=getAction(cur,d,rules,canSurr,canDouble,canSplit);
 
         if(action==='R' && canSurr){ cur.surrendered=true; break; }
         if(action==='P' && canSplit){
-          const c1=cur.cards[0], c2=cur.cards[1];
-          const h1=new Hand(cur.bet), h2=new Hand(cur.bet);
+          c1=cur.cards[0]; c2=cur.cards[1];
+          h1=new Hand(cur.bet); h2=new Hand(cur.bet);
           h1.splitFrom=cur; h2.splitFrom=cur;
           h1.cards.push(c1); dealTo(h1);
           h2.cards.push(c2); dealTo(h2);
@@ -357,152 +373,174 @@
     return finished;
   }
   function playDealer(shoe,dealer,rules,counter){
-    while(true){ const v=dealer.value();
+    var v,r;
+    while(true){ v=dealer.value();
       if(v>21) break; if(v>17) break;
       if(v===17){ if(!(rules.h17 && dealer.isSoft())) break; }
-      const r=shoe.deal(); dealer.cards.push(r); if(counter)counter.update(r);
+      r=shoe.deal(); dealer.cards.push(r); if(counter)counter.update(r);
     }
   }
-  function settle(h,dealer){ const pv=h.value(), dv=dealer.value();
+  function settle(h,dealer){ var pv=h.value(), dv=dealer.value();
     if(dv>21) return h.bet; if(pv>dv) return h.bet; if(pv<dv) return -h.bet; return 0; }
 
   function playHand(shoe,rules,bet,counter,useDev){
-    const deal=h=>{ const r=shoe.deal(); h.cards.push(r); if(counter)counter.update(r); };
-    const player=new Hand(bet), dealer=new Hand(0);
+    function deal(h){ var r=shoe.deal(); h.cards.push(r); if(counter)counter.update(r); }
+    var player=new Hand(bet), dealer=new Hand(0), hole, d, tc, hands=[], insNet=0, insBet=0,
+        dealerNatural, finished, i, h;
     deal(player); deal(dealer); deal(player);
-    const hole=shoe.deal(); dealer.cards.push(hole);   // hole card NOT counted yet
-    const d=Math.min(VAL[dealer.cards[0]],11);
-    const tc = counter ? counter.trueCount(shoe.decksRemaining) : 0;
-    const hands=[]; let insNet=0, insBet=0;
+    hole=shoe.deal(); dealer.cards.push(hole);   /* hole card NOT counted yet */
+    d=Math.min(VAL[dealer.cards[0]],11);
+    tc = counter ? counter.trueCount(shoe.decksRemaining) : 0;
 
     if(dealer.cards[0]==='A'){
       if(counter && useDev && shouldTakeInsurance(tc)) insBet=bet/2;
     }
-    const dealerNatural = dealer.cards[0]==='A' || VAL[dealer.cards[0]]===10;
+    dealerNatural = dealer.cards[0]==='A' || VAL[dealer.cards[0]]===10;
 
     if(rules.dealerPeeks && dealerNatural && dealer.isBlackjack()){
       if(counter) counter.update(hole);
-      if(player.isBlackjack()){ if(insBet) insNet=insBet*2; hands.push({bet,net:0}); }
-      else { if(insBet) insNet=insBet*2; hands.push({bet,net:-bet}); }
-      return {hands, insNet};
+      if(player.isBlackjack()){ if(insBet) insNet=insBet*2; hands.push({bet:bet,net:0}); }
+      else { if(insBet) insNet=insBet*2; hands.push({bet:bet,net:-bet}); }
+      return {hands:hands, insNet:insNet};
     }
     if(player.isBlackjack()){
       if(counter) counter.update(hole);
-      if(dealer.isBlackjack()){ if(insBet) insNet=insBet*2; hands.push({bet,net:0}); }
-      else { if(insBet) insNet=-insBet; hands.push({bet,net:bet*rules.blackjackPays}); }
-      return {hands, insNet};
+      if(dealer.isBlackjack()){ if(insBet) insNet=insBet*2; hands.push({bet:bet,net:0}); }
+      else { if(insBet) insNet=-insBet; hands.push({bet:bet,net:bet*rules.blackjackPays}); }
+      return {hands:hands, insNet:insNet};
     }
     if(insBet) insNet=-insBet;
 
-    const finished=playPlayerHands(shoe,rules,player,d,counter,useDev,tc);
+    finished=playPlayerHands(shoe,rules,player,d,counter,useDev,tc);
 
     if(!rules.dealerPeeks && dealer.isBlackjack()){
       if(counter) counter.update(hole);
-      for(const h of finished){
+      for(i=0;i<finished.length;i++){ h=finished[i];
         if(h.surrendered) hands.push({bet:h.bet,net:-(h.bet/2)});
-        else hands.push({bet:h.bet,net:-h.bet});
-      }
-      return {hands, insNet};
+        else hands.push({bet:h.bet,net:-h.bet}); }
+      return {hands:hands, insNet:insNet};
     }
     if(counter) counter.update(hole);
     playDealer(shoe,dealer,rules,counter);
-    for(const h of finished){
+    for(i=0;i<finished.length;i++){ h=finished[i];
       if(h.surrendered){ hands.push({bet:h.bet,net:-(h.bet/2)}); continue; }
       if(h.isBust()){ hands.push({bet:h.bet,net:-h.bet}); continue; }
-      hands.push({bet:h.bet,net:settle(h,dealer)});
-    }
-    return {hands, insNet};
+      hands.push({bet:h.bet,net:settle(h,dealer)}); }
+    return {hands:hands, insNet:insNet};
   }
 
-  // ---- One run: returns per-round aggregates + whether it ruined ----
   function runSimulation(opts){
-    const {rules,nHands,startingBankroll,ramp,useCounting=true,useDeviations=true,flatBet=null}=opts;
-    const shoe=new Shoe(rules.numDecks,rules.penetration);
-    const counter=useCounting?new Counter():null;
+    var rules=opts.rules, nHands=opts.nHands, ramp=opts.ramp,
+        useCounting = opts.useCounting===undefined ? true : opts.useCounting,
+        useDeviations = opts.useDeviations===undefined ? true : opts.useDeviations,
+        flatBet = opts.flatBet===undefined ? null : opts.flatBet;
+    var shoe=new Shoe(rules.numDecks,rules.penetration);
+    var counter=useCounting?new Counter():null;
     shoe.counter=counter;
-    let bankroll=startingBankroll, ruined=false;
-    let netSum=0, netSq=0, count=0, wagerSum=0;
-    for(let i=0;i<nHands;i++){
+    var bankroll=opts.startingBankroll, ruined=false;
+    var netSum=0,netSq=0,count=0,wagerSum=0,i,tc,bet,round,rNet,rWager,j;
+    for(i=0;i<nHands;i++){
       if(bankroll<=0){ ruined=true; break; }
       if(shoe.needsReshuffle) shoe.reshuffle();
-      const tc = counter ? counter.trueCount(shoe.decksRemaining) : 0;
-      let bet;
+      tc = counter ? counter.trueCount(shoe.decksRemaining) : 0;
       if(flatBet!==null) bet=flatBet;
       else if(useCounting) bet=Math.min(ramp.betSize(tc),bankroll);
       else bet=Math.min(ramp.unit,bankroll);
-      const round=playHand(shoe,rules,bet,counter,useDeviations);
-      let rNet=round.insNet, rWager=0;
-      for(const h of round.hands){ rNet+=h.net; rWager+=h.bet; }
+      round=playHand(shoe,rules,bet,counter,useDeviations);
+      rNet=round.insNet; rWager=0;
+      for(j=0;j<round.hands.length;j++){ rNet+=round.hands[j].net; rWager+=round.hands[j].bet; }
       bankroll+=rNet;
       netSum+=rNet; netSq+=rNet*rNet; count++; wagerSum+=rWager;
       if(bankroll<=0){ ruined=true; }
     }
-    return {netSum,netSq,count,wagerSum,ruined};
+    return {netSum:netSum,netSq:netSq,count:count,wagerSum:wagerSum,ruined:ruined};
   }
 
-  globalThis.BJ = { makeRules, BetRamp, Counter, Shoe, runSimulation, playHand, getAction, val, hiLo };
-})();
+  root.BJ = { makeRules:makeRules, BetRamp:BetRamp, Counter:Counter, Shoe:Shoe,
+              runSimulation:runSimulation, playHand:playHand, getAction:getAction };
+})(typeof window !== 'undefined' ? window : this);
 </script>
 
 <!-- ============================ UI + ANALYTICS ============================ -->
 <script>
 (function(){
-  const BJ = globalThis.BJ;
-  const $ = id => document.getElementById(id);
+  "use strict";
+  var BJ = window.BJ;
+  function $(id){ return document.getElementById(id); }
+  function showErr(m){ var e=$('errbar'); if(e){ e.style.display='block'; e.textContent=m; } }
+  if(!BJ){ showErr('Simulation core failed to load — the analyzer cannot run.'); return; }
 
-  const PRESETS = {
+  var PRESETS = {
     "6-Deck H17 (Vegas Strip)": {numDecks:6,h17:true},
     "6-Deck S17": {numDecks:6,h17:false},
     "2-Deck S17 (Downtown)": {numDecks:2,h17:false},
-    "8-Deck H17": {numDecks:8,h17:true},
+    "8-Deck H17": {numDecks:8,h17:true}
   };
-  const DEFAULT_SPREAD = [[-1,1],[0,1],[1,2],[2,3],[3,4],[4,6],[5,8]];
+  var DEFAULT_SPREAD = [[-1,1],[0,1],[1,2],[2,3],[3,4],[4,6],[5,8]];
 
-  // populate presets
-  const presetSel=$('preset');
-  Object.keys(PRESETS).forEach(k=>{ const o=document.createElement('option'); o.textContent=k; presetSel.appendChild(o); });
-  presetSel.addEventListener('change', ()=>{
-    const p=PRESETS[presetSel.value]; if(!p) return;
+  var presetSel=$('preset');
+  var names=Object.keys(PRESETS), pi;
+  for(pi=0;pi<names.length;pi++){
+    var o=document.createElement('option'); o.textContent=names[pi]; presetSel.appendChild(o);
+  }
+  presetSel.onchange=function(){
+    var p=PRESETS[presetSel.value]; if(!p) return;
     $('decks').value=String(p.numDecks); $('h17').value=p.h17?'1':'0';
-  });
+  };
 
-  // spread table
-  const body=$('spreadBody');
+  /* ---------------- spread table ---------------- */
+  var body=$('spreadBody');
   function addRow(tc,mult){
-    const tr=document.createElement('tr');
-    tr.innerHTML =
-      '<td><button class="xbtn" title="remove">×</button></td>'+
-      '<td><input type="number" class="tc" value="'+tc+'" step="1"></td>'+
-      '<td><input type="number" class="mult" value="'+mult+'" min="0" step="1"></td>'+
-      '<td class="amt">$0</td>';
-    tr.querySelector('.xbtn').addEventListener('click',()=>{ tr.remove(); recalcAmts(); });
-    tr.querySelector('.mult').addEventListener('input',recalcAmts);
+    var tr=document.createElement('tr');
+    var tdX=document.createElement('td');
+    var btn=document.createElement('button');
+    btn.className='xbtn'; btn.title='remove'; btn.innerHTML='&times;';
+    btn.onclick=function(){ tr.parentNode.removeChild(tr); recalcAmts(); };
+    tdX.appendChild(btn);
+    var tdT=document.createElement('td');
+    var inT=document.createElement('input');
+    inT.type='number'; inT.step='1'; inT.className='tc'; inT.value=tc;
+    tdT.appendChild(inT);
+    var tdM=document.createElement('td');
+    var inM=document.createElement('input');
+    inM.type='number'; inM.step='1'; inM.min='0'; inM.className='mult'; inM.value=mult;
+    inM.oninput=recalcAmts;
+    tdM.appendChild(inM);
+    var tdA=document.createElement('td'); tdA.className='amt'; tdA.textContent='$0';
+    tr.appendChild(tdX); tr.appendChild(tdT); tr.appendChild(tdM); tr.appendChild(tdA);
     body.appendChild(tr);
   }
-  DEFAULT_SPREAD.forEach(([tc,m])=>addRow(tc,m));
-  $('addRow').addEventListener('click',()=>{
-    let maxTc=-1; body.querySelectorAll('.tc').forEach(i=>maxTc=Math.max(maxTc,Number(i.value)||0));
-    addRow(maxTc+1,1); recalcAmts();
-  });
-
-  const num=(id,def)=>{ const v=parseFloat($(id).value); return isFinite(v)?v:def; };
+  function loadDefaultSpread(){
+    while(body.firstChild) body.removeChild(body.firstChild);
+    for(var i=0;i<DEFAULT_SPREAD.length;i++) addRow(DEFAULT_SPREAD[i][0],DEFAULT_SPREAD[i][1]);
+    recalcAmts();
+  }
+  function num(id,def){ var v=parseFloat($(id).value); return isFinite(v)?v:def; }
   function recalcAmts(){
-    const unit=num('unit',25);
-    body.querySelectorAll('tr').forEach(tr=>{
-      const m=parseFloat(tr.querySelector('.mult').value)||0;
-      tr.querySelector('.amt').textContent='$'+(unit*m).toFixed(0);
-    });
+    var unit=num('unit',25), rows=body.getElementsByTagName('tr'), i, m;
+    for(i=0;i<rows.length;i++){
+      m=parseFloat(rows[i].getElementsByClassName('mult')[0].value)||0;
+      rows[i].getElementsByClassName('amt')[0].textContent='$'+(unit*m).toFixed(0);
+    }
   }
   function updateUnitsHint(){
-    const b=num('bankroll',0), u=num('unit',0);
+    var b=num('bankroll',0), u=num('unit',0);
     $('unitsHint').textContent = (b>0&&u>0) ? ('= '+Math.round(b/u)+' units') : '';
   }
-  $('unit').addEventListener('input',()=>{ recalcAmts(); updateUnitsHint(); });
-  $('bankroll').addEventListener('input',updateUnitsHint);
-  recalcAmts(); updateUnitsHint();
+  $('addRow').onclick=function(){
+    var rows=body.getElementsByClassName('tc'), maxTc=-1, i, v;
+    for(i=0;i<rows.length;i++){ v=parseFloat(rows[i].value); if(isFinite(v)) maxTc=Math.max(maxTc,v); }
+    addRow(maxTc+1,1); recalcAmts();
+  };
+  $('resetSpread').onclick=loadDefaultSpread;
+  $('unit').oninput=function(){ recalcAmts(); updateUnitsHint(); };
+  $('bankroll').oninput=updateUnitsHint;
+  loadDefaultSpread();
+  updateUnitsHint();
 
+  /* ---------------- build config ---------------- */
   function buildRules(){
-    let pen=num('penetration',0.75); pen=Math.min(0.95,Math.max(0.5,pen));
+    var pen=num('penetration',0.75); pen=Math.min(0.95,Math.max(0.5,pen));
     return BJ.makeRules({
       numDecks: parseInt($('decks').value,10)||6,
       h17: $('h17').value==='1',
@@ -512,120 +550,166 @@
       maxSplits: parseInt($('maxsplits').value,10)||3,
       blackjackPays: parseFloat($('bjpays').value)||1.5,
       penetration: pen,
-      dealerPeeks: $('peek').value==='1',
+      dealerPeeks: $('peek').value==='1'
     });
   }
   function buildRamp(){
-    const unit=num('unit',25); const ramp={};
-    body.querySelectorAll('tr').forEach(tr=>{
-      const tc=Math.trunc(parseFloat(tr.querySelector('.tc').value));
-      const m=parseFloat(tr.querySelector('.mult').value);
+    var unit=num('unit',25), ramp={}, rows=body.getElementsByTagName('tr'), i, tc, m, keys, lowest;
+    for(i=0;i<rows.length;i++){
+      tc=Math.trunc(parseFloat(rows[i].getElementsByClassName('tc')[0].value));
+      m=parseFloat(rows[i].getElementsByClassName('mult')[0].value);
       if(isFinite(tc)&&isFinite(m)) ramp[tc]=m;
-    });
-    if(Object.keys(ramp).length===0) ramp[0]=1;
-    const lowest=Math.min(...Object.keys(ramp).map(Number));
+    }
+    keys=Object.keys(ramp);
+    if(keys.length===0) ramp[0]=1;
+    lowest=Math.min.apply(null, Object.keys(ramp).map(Number));
     ramp[-99]=ramp[lowest];
     return new BJ.BetRamp(unit, ramp);
   }
 
-  // ---- Analysis: run many sessions (chunked, non-blocking) ----
-  const zsleep = ()=>new Promise(r=>setTimeout(r,0));
-  async function runAnalysis(){
-    const rules=buildRules(), ramp=buildRamp();
-    const B=num('bankroll',10000), hph=Math.max(1,num('hph',100));
-    const nHands=Math.max(100,parseInt($('nhands').value,10)||2000);
-    let nRuns=Math.max(1,parseInt($('nruns').value,10)||300);
-    if(nRuns*nHands>2_000_000) nRuns=Math.max(1,Math.floor(2_000_000/nHands)); // work cap
-
-    let netSum=0,netSq=0,count=0,wagerSum=0,ruined=0;
-    const btn=$('run'); btn.disabled=true; btn.textContent='Running…';
-    $('progress').style.display='block';
-    const t0=performance.now();
-    for(let r=0;r<nRuns;r++){
-      const s=BJ.runSimulation({rules,nHands,startingBankroll:B,ramp,useCounting:true,useDeviations:true});
+  /* ---------------- house edge (rules only; cached) ---------------- */
+  var houseCache={};
+  function sleep(){ return new Promise(function(r){ setTimeout(r,0); }); }
+  function computeHouseEdge(rules, onProg){
+    var key=JSON.stringify(rules);
+    if(houseCache[key]) return Promise.resolve(houseCache[key]);
+    var ramp=new BJ.BetRamp(1,{'-99':1,0:1});
+    var netSum=0,netSq=0,count=0,wagerSum=0;
+    var CHUNK=25000, TOTAL=2000000, done=0;
+    function step(){
+      if(done>=TOTAL){
+        var mu=count?netSum/count:0;
+        var variance=count?Math.max(0,netSq/count-mu*mu):0;
+        var sd=Math.sqrt(variance), avgW=count?wagerSum/count:0;
+        var pct=wagerSum?netSum/wagerSum*100:0;
+        var ci=(count>1&&avgW)?1.96*(sd/Math.sqrt(count))/avgW*100:0;
+        var res={pct:pct,ci:ci}; houseCache[key]=res; return Promise.resolve(res);
+      }
+      var s=BJ.runSimulation({rules:rules,nHands:CHUNK,startingBankroll:1e9,ramp:ramp,
+        useCounting:false,useDeviations:false,flatBet:1});
       netSum+=s.netSum; netSq+=s.netSq; count+=s.count; wagerSum+=s.wagerSum;
-      if(s.ruined) ruined++;
-      if((r&15)===0){ $('bar').style.width=((r+1)/nRuns*100)+'%'; await zsleep(); }
+      done+=CHUNK; onProg(done/TOTAL);
+      return sleep().then(step);
     }
-    $('bar').style.width='100%';
-
-    const mu = count?netSum/count:0;
-    const variance = count?Math.max(0,netSq/count-mu*mu):0;
-    const sd=Math.sqrt(variance);
-    const avgWager = count?wagerSum/count:0;
-    const evPct = wagerSum?netSum/wagerSum*100:0;
-    const evHr = mu*hph;
-    const se = count>1?sd/Math.sqrt(count):0;
-    const ciPct = avgWager?1.96*se/avgWager*100:0;
-    const ciHr = 1.96*se*hph;
-    const n0 = (mu>0&&sd>0)?Math.pow(sd/mu,2):Infinity;
-    const ror = variance<=0 ? (mu<=0?1:0) : (mu<=0?1:Math.min(1,Math.exp(-2*mu*B/variance)));
-    const empRor = nRuns?ruined/nRuns:0;
-
-    // metrics
-    $('mEv').innerHTML = fmtPct(evPct,3)+' <span class="ci">± '+ciPct.toFixed(3)+'%</span>';
-    $('mEvhr').innerHTML = '$'+fmtSigned(evHr,2)+' <span class="ci">± $'+ciHr.toFixed(2)+'</span>';
-    $('mRor').innerHTML = (ror*100).toFixed(2)+'% <span class="ci">sim: '+(empRor*100).toFixed(2)+'%</span>';
-    $('mN0').textContent = isFinite(n0)?Math.round(n0).toLocaleString():'∞';
-
-    drawChart(B, mu, variance, nHands);
-    const secs=((performance.now()-t0)/1000).toFixed(1);
-    $('note').innerHTML = nRuns.toLocaleString()+' runs × '+nHands.toLocaleString()+' hands ('+secs+'s) · '+
-      'std dev $'+Math.round(sd).toLocaleString()+'/hand · RoR is analytic lifetime '+
-      '(exp(−2·μ·B/σ²)); “sim” is the share of runs that dipped to $0 within '+nHands.toLocaleString()+' hands · '+
-      'shaded band = analytic 10th–90th percentile bankroll, line = median.';
-    $('progress').style.display='none';
-    btn.disabled=false; btn.textContent='Run Analysis';
+    return step();
   }
-  const fmtPct=(x,d)=>(x>=0?'+':'')+x.toFixed(d)+'%';
-  const fmtSigned=(x,d)=>(x>=0?'+':'')+x.toFixed(d);
 
-  // ---- Analytic percentile bankroll chart on canvas ----
-  function drawChart(B, mu, variance, nHands){
-    const cv=$('chart'), dpr=window.devicePixelRatio||1;
-    const W=cv.clientWidth, H=cv.clientHeight;
+  /* ---------------- main analysis ---------------- */
+  function runAnalysis(){
+    var rules, ramp, B, hph, nHands, nRuns;
+    try{ rules=buildRules(); ramp=buildRamp(); }
+    catch(err){ showErr('Config error: '+err.message); return; }
+    B=num('bankroll',10000); hph=Math.max(1,num('hph',100));
+    nHands=Math.max(100,parseInt($('nhands').value,10)||2000);
+    nRuns=Math.max(1,parseInt($('nruns').value,10)||300);
+    if(nRuns*nHands>2000000) nRuns=Math.max(1,Math.floor(2000000/nHands));
+
+    var btn=$('run'); btn.disabled=true; btn.textContent='Running…';
+    $('progress').style.display='block'; $('bar').style.width='0%';
+    var t0=(window.performance&&performance.now)?performance.now():Date.now();
+
+    computeHouseEdge(rules, function(f){ $('bar').style.width=(f*40)+'%'; })
+      .then(function(house){
+        var netSum=0,netSq=0,count=0,wagerSum=0,ruined=0,r=0;
+        function chunk(){
+          var end=Math.min(nRuns, r+16);
+          for(; r<end; r++){
+            var s=BJ.runSimulation({rules:rules,nHands:nHands,startingBankroll:B,ramp:ramp,
+              useCounting:true,useDeviations:true});
+            netSum+=s.netSum; netSq+=s.netSq; count+=s.count; wagerSum+=s.wagerSum;
+            if(s.ruined) ruined++;
+          }
+          $('bar').style.width=(40+60*r/nRuns)+'%';
+          if(r<nRuns) return sleep().then(chunk);
+          return Promise.resolve();
+        }
+        return chunk().then(function(){
+          var mu=count?netSum/count:0;
+          var variance=count?Math.max(0,netSq/count-mu*mu):0;
+          var sd=Math.sqrt(variance), avgWager=count?wagerSum/count:0;
+          var evPct=wagerSum?netSum/wagerSum*100:0;
+          var evHr=mu*hph;
+          var se=count>1?sd/Math.sqrt(count):0;
+          var ciPct=avgWager?1.96*se/avgWager*100:0;
+          var ciHr=1.96*se*hph;
+          var n0=(mu>0&&sd>0)?Math.pow(sd/mu,2):Infinity;
+          var ror=variance<=0?(mu<=0?1:0):(mu<=0?1:Math.min(1,Math.exp(-2*mu*B/variance)));
+          var empRor=nRuns?ruined/nRuns:0;
+
+          $('mHouse').innerHTML=sgn(house.pct,3)+' <span class="ci">&plusmn; '+house.ci.toFixed(3)+'%</span>';
+          $('mEv').innerHTML=sgn(evPct,3)+' <span class="ci">&plusmn; '+ciPct.toFixed(3)+'%</span>';
+          $('mEvhr').innerHTML='$'+sgnNum(evHr,2)+' <span class="ci">&plusmn; $'+ciHr.toFixed(2)+'</span>';
+          $('mRor').innerHTML=(ror*100).toFixed(2)+'% <span class="ci">sim: '+(empRor*100).toFixed(2)+'%</span>';
+          $('mN0').textContent=isFinite(n0)?Math.round(n0).toLocaleString():'∞';
+
+          drawChart(B,mu,variance,nHands);
+          var t1=(window.performance&&performance.now)?performance.now():Date.now();
+          $('note').innerHTML=nRuns.toLocaleString()+' runs × '+nHands.toLocaleString()+
+            ' hands ('+((t1-t0)/1000).toFixed(1)+'s) · std dev $'+Math.round(sd).toLocaleString()+
+            '/hand · House edge = flat-bet basic strategy, no counting (2M hands, cached per rule set) · '+
+            'RoR is analytic lifetime exp(−2·μ·B/σ²); “sim” is the share of runs that hit $0 within '+
+            nHands.toLocaleString()+' hands · shaded band = analytic 10th–90th percentile bankroll.';
+          $('progress').style.display='none';
+          btn.disabled=false; btn.textContent='Run Analysis';
+        });
+      })
+      .catch(function(err){
+        showErr('Run failed: '+(err&&err.message?err.message:err));
+        $('progress').style.display='none';
+        btn.disabled=false; btn.textContent='Run Analysis';
+      });
+  }
+  function sgn(x,d){ return (x>=0?'+':'')+x.toFixed(d)+'%'; }
+  function sgnNum(x,d){ return (x>=0?'+':'')+x.toFixed(d); }
+
+  /* ---------------- analytic percentile chart ---------------- */
+  var lastChart=null;
+  function drawChart(B,mu,variance,nHands){
+    lastChart={B:B,mu:mu,variance:variance,nHands:nHands};
+    var cv=$('chart'), dpr=window.devicePixelRatio||1;
+    var W=cv.clientWidth, H=cv.clientHeight;
+    if(!W||!H) return;
     cv.width=W*dpr; cv.height=H*dpr;
-    const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
-    const css=getComputedStyle(document.documentElement);
-    const green=css.getPropertyValue('--green').trim()||'#1f7a3d';
-    const muted=css.getPropertyValue('--muted').trim()||'#6b7785';
-    const border=css.getPropertyValue('--border').trim()||'#e2e6ea';
-    const z=1.2816; // 10th/90th percentile
-    const N=120, med=[],lo=[],hi=[];
-    for(let i=0;i<=N;i++){ const n=nHands*i/N; const m=B+mu*n, s=Math.sqrt(variance*n);
+    var ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+    var css=getComputedStyle(document.documentElement);
+    var green=(css.getPropertyValue('--green')||'').trim()||'#1f7a3d';
+    var muted=(css.getPropertyValue('--muted')||'').trim()||'#6b7785';
+    var border=(css.getPropertyValue('--border')||'').trim()||'#e2e6ea';
+    var z=1.2816, N=120, med=[],lo=[],hi=[], i,n,m,s;
+    for(i=0;i<=N;i++){ n=nHands*i/N; m=B+mu*n; s=Math.sqrt(variance*n);
       med.push(m); lo.push(m-z*s); hi.push(m+z*s); }
-    let yMin=Math.min(B,...lo), yMax=Math.max(B,...hi);
-    if(yMin===yMax){ yMin-=1; yMax+=1; } const pad=(yMax-yMin)*0.08; yMin-=pad; yMax+=pad;
-    const mL=64,mR=14,mT=16,mB=34, pw=W-mL-mR, ph=H-mT-mB;
-    const X=i=>mL+pw*i/N, Y=v=>mT+ph*(1-(v-yMin)/(yMax-yMin));
-    // grid + y labels
+    var yMin=B,yMax=B;
+    for(i=0;i<=N;i++){ if(lo[i]<yMin)yMin=lo[i]; if(hi[i]>yMax)yMax=hi[i]; }
+    if(yMin===yMax){ yMin-=1; yMax+=1; }
+    var pad=(yMax-yMin)*0.08; yMin-=pad; yMax+=pad;
+    var mL=66,mR=14,mT=16,mB=34, pw=W-mL-mR, ph=H-mT-mB;
+    function X(i){ return mL+pw*i/N; }
+    function Y(v){ return mT+ph*(1-(v-yMin)/(yMax-yMin)); }
     ctx.strokeStyle=border; ctx.fillStyle=muted; ctx.font='11px system-ui'; ctx.lineWidth=1;
-    const ticks=5;
-    for(let t=0;t<=ticks;t++){ const v=yMin+(yMax-yMin)*t/ticks, y=Y(v);
-      ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(mL,y); ctx.lineTo(W-mR,y); ctx.stroke(); ctx.globalAlpha=1;
-      ctx.textAlign='right'; ctx.fillText('$'+Math.round(v).toLocaleString(), mL-6, y+3); }
-    // band
+    var ticks=5,t,v,y;
+    for(t=0;t<=ticks;t++){ v=yMin+(yMax-yMin)*t/ticks; y=Y(v);
+      ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(mL,y); ctx.lineTo(W-mR,y); ctx.stroke();
+      ctx.globalAlpha=1; ctx.textAlign='right';
+      ctx.fillText('$'+Math.round(v).toLocaleString(), mL-6, y+3); }
     ctx.beginPath(); ctx.moveTo(X(0),Y(hi[0]));
-    for(let i=1;i<=N;i++) ctx.lineTo(X(i),Y(hi[i]));
-    for(let i=N;i>=0;i--) ctx.lineTo(X(i),Y(lo[i])); ctx.closePath();
-    ctx.fillStyle=hexA(green,0.15); ctx.fill();
-    // start line
+    for(i=1;i<=N;i++) ctx.lineTo(X(i),Y(hi[i]));
+    for(i=N;i>=0;i--) ctx.lineTo(X(i),Y(lo[i]));
+    ctx.closePath(); ctx.fillStyle=rgba(green,0.15); ctx.fill();
     ctx.strokeStyle=muted; ctx.setLineDash([4,4]); ctx.beginPath();
     ctx.moveTo(mL,Y(B)); ctx.lineTo(W-mR,Y(B)); ctx.stroke(); ctx.setLineDash([]);
-    // median
     ctx.strokeStyle=green; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(X(0),Y(med[0]));
-    for(let i=1;i<=N;i++) ctx.lineTo(X(i),Y(med[i])); ctx.stroke();
-    // x labels
+    for(i=1;i<=N;i++) ctx.lineTo(X(i),Y(med[i])); ctx.stroke();
     ctx.fillStyle=muted; ctx.textAlign='center';
-    for(let t=0;t<=4;t++){ const i=N*t/4, x=X(i);
-      ctx.fillText(Math.round(nHands*t/4).toLocaleString(), x, H-12); }
+    for(t=0;t<=4;t++) ctx.fillText(Math.round(nHands*t/4).toLocaleString(), X(N*t/4), H-12);
     ctx.fillText('Hands played', mL+pw/2, H-1);
   }
-  function hexA(hex,a){ hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
-    const n=parseInt(hex,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+  function rgba(hex,a){ hex=(hex||'').replace('#','');
+    if(hex.length===3) hex=hex.charAt(0)+hex.charAt(0)+hex.charAt(1)+hex.charAt(1)+hex.charAt(2)+hex.charAt(2);
+    var n=parseInt(hex,16); if(!isFinite(n)) return 'rgba(31,122,61,'+a+')';
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
 
-  $('run').addEventListener('click',runAnalysis);
-  window.addEventListener('resize',()=>{ /* chart redraw on next run */ });
+  $('run').onclick=runAnalysis;
+  window.onresize=function(){ if(lastChart) drawChart(lastChart.B,lastChart.mu,lastChart.variance,lastChart.nHands); };
 })();
 </script>
 </body>
